@@ -3,7 +3,7 @@ name: Daily Reddit Crawl
 on:
   schedule:
     - cron: '0 10 * * *'  # 10:00 UTC = 6:00 AM ET
-  workflow_dispatch: {}     # Manual trigger for testing
+  workflow_dispatch:
 
 jobs:
   crawl:
