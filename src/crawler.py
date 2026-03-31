@@ -6,9 +6,9 @@ from supabase import create_client
 
 from src.config import (
     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-    USER_AGENT, REQUEST_DELAY, POSTS_PER_SUBREDDIT,
+    USER_AGENT, REQUEST_DELAY, SEARCH_RESULTS_PER_QUERY,
     TOP_COMMENTS_PER_POST, MIN_SCORE_FOR_COMMENTS,
-    MIN_COMMENTS_FOR_FETCH, ALL_SUBREDDITS,
+    MIN_COMMENTS_FOR_FETCH, ALL_SUBREDDITS, SEARCH_KEYWORDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,16 +19,55 @@ session.headers.update({"User-Agent": USER_AGENT})
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
-def fetch_subreddit_posts(subreddit: str) -> list[dict]:
-    """Fetch hot posts from a subreddit via public JSON feed."""
-    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
-    params = {"limit": POSTS_PER_SUBREDDIT, "raw_json": 1}
+def parse_post(child: dict, source_sub: str = "") -> dict | None:
+    """Parse a Reddit post JSON object into our format."""
+    post = child.get("data", {})
+    if post.get("stickied"):
+        return None
+
+    return {
+        "reddit_id": post["id"],
+        "subreddit": post.get("subreddit", source_sub),
+        "title": post.get("title", ""),
+        "body": post.get("selftext", ""),
+        "score": post.get("score", 0),
+        "num_comments": post.get("num_comments", 0),
+        "url": post.get("url", ""),
+        "permalink": f"https://www.reddit.com{post.get('permalink', '')}",
+        "posted_at": datetime.fromtimestamp(
+            post.get("created_utc", 0), tz=timezone.utc
+        ).isoformat(),
+        "top_comments": [],
+    }
+
+
+def search_reddit(query: str, subreddit: str | None = None) -> list[dict]:
+    """Search Reddit for posts matching a query. Optionally scoped to a subreddit."""
+    if subreddit:
+        url = f"https://www.reddit.com/r/{subreddit}/search.json"
+        params = {
+            "q": query,
+            "restrict_sr": "on",
+            "sort": "relevance",
+            "t": "week",
+            "limit": SEARCH_RESULTS_PER_QUERY,
+            "raw_json": 1,
+        }
+    else:
+        url = "https://www.reddit.com/search.json"
+        params = {
+            "q": query,
+            "sort": "relevance",
+            "t": "week",
+            "limit": SEARCH_RESULTS_PER_QUERY,
+            "raw_json": 1,
+        }
 
     try:
         resp = session.get(url, params=params, timeout=15)
 
         if resp.status_code == 429:
-            logger.warning(f"Rate limited on r/{subreddit}, sleeping 60s...")
+            logger.warning(f"Rate limited searching '{query}', sleeping 60s...")
             time.sleep(60)
             resp = session.get(url, params=params, timeout=15)
 
@@ -37,30 +76,17 @@ def fetch_subreddit_posts(subreddit: str) -> list[dict]:
 
         posts = []
         for child in data.get("data", {}).get("children", []):
-            post = child.get("data", {})
-            if post.get("stickied"):
-                continue  # skip pinned mod posts
+            parsed = parse_post(child)
+            if parsed:
+                posts.append(parsed)
 
-            posts.append({
-                "reddit_id": post["id"],
-                "subreddit": subreddit,
-                "title": post.get("title", ""),
-                "body": post.get("selftext", ""),
-                "score": post.get("score", 0),
-                "num_comments": post.get("num_comments", 0),
-                "url": post.get("url", ""),
-                "permalink": f"https://www.reddit.com{post.get('permalink', '')}",
-                "posted_at": datetime.fromtimestamp(
-                    post.get("created_utc", 0), tz=timezone.utc
-                ).isoformat(),
-                "top_comments": [],
-            })
-
-        logger.info(f"r/{subreddit}: fetched {len(posts)} posts")
+        scope = f"r/{subreddit}" if subreddit else "all"
+        logger.info(f"Search '{query}' in {scope}: {len(posts)} posts")
         return posts
 
     except Exception as e:
-        logger.error(f"r/{subreddit}: failed to fetch — {e}")
+        scope = f"r/{subreddit}" if subreddit else "all"
+        logger.error(f"Search '{query}' in {scope}: failed — {e}")
         return []
 
 
@@ -111,39 +137,55 @@ def store_posts(posts: list[dict]) -> int:
 
 
 def crawl_all() -> dict:
-    """Crawl all configured subreddits. Returns stats."""
-    all_posts = []
-    succeeded = []
-    failed = []
+    """Search Reddit for pain points using keywords. Returns stats."""
+    all_posts = {}  # keyed by reddit_id to deduplicate across searches
+    searches_succeeded = []
+    searches_failed = []
 
-    for sub in ALL_SUBREDDITS:
-        posts = fetch_subreddit_posts(sub)
+    # Search each keyword across all of Reddit (broader net)
+    for keyword in SEARCH_KEYWORDS:
+        posts = search_reddit(keyword)
         if posts:
-            succeeded.append(sub)
-            all_posts.extend(posts)
+            searches_succeeded.append(keyword)
+            for p in posts:
+                all_posts[p["reddit_id"]] = p
         else:
-            failed.append(sub)
+            searches_failed.append(keyword)
         time.sleep(REQUEST_DELAY)
 
-    # Fetch comments for high-engagement posts
+    # Also search within our target subreddits for broader terms
+    broad_terms = ["struggling", "overwhelmed", "can't keep up", "burned out"]
+    for sub in ALL_SUBREDDITS:
+        for term in broad_terms:
+            posts = search_reddit(term, subreddit=sub)
+            if posts:
+                for p in posts:
+                    all_posts[p["reddit_id"]] = p
+            time.sleep(REQUEST_DELAY)
+
+    unique_posts = list(all_posts.values())
+
+    # Fetch comments for posts with engagement
     comment_count = 0
-    for post in all_posts:
+    for post in unique_posts:
         if post["score"] >= MIN_SCORE_FOR_COMMENTS or post["num_comments"] >= MIN_COMMENTS_FOR_FETCH:
             post["top_comments"] = fetch_top_comments(post["reddit_id"])
             comment_count += 1
             time.sleep(REQUEST_DELAY)
 
-    logger.info(f"Fetched comments for {comment_count} high-engagement posts")
+    logger.info(f"Fetched comments for {comment_count} posts with engagement")
 
-    stored = store_posts(all_posts)
+    stored = store_posts(unique_posts)
 
     stats = {
-        "posts_crawled": len(all_posts),
+        "posts_crawled": len(unique_posts),
         "posts_stored": stored,
         "comments_fetched": comment_count,
-        "subreddits_succeeded": succeeded,
-        "subreddits_failed": failed,
+        "searches_succeeded": searches_succeeded,
+        "searches_failed": searches_failed,
     }
 
-    logger.info(f"Crawl complete: {stats['posts_crawled']} posts from {len(succeeded)} subreddits")
+    logger.info(f"Crawl complete: {stats['posts_crawled']} unique posts, "
+                f"{len(searches_succeeded)} keyword searches OK, "
+                f"{len(searches_failed)} failed")
     return stats

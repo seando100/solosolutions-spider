@@ -16,12 +16,27 @@ RECIPIENT_EMAIL = "sean@solosolutionsai.com"
 # --- Reddit ---
 USER_AGENT = "SoloSolutionsSpider/1.0 (market-research; contact: sean@solosolutionsai.com)"
 REQUEST_DELAY = 2.0  # seconds between Reddit requests
-POSTS_PER_SUBREDDIT = 100
+SEARCH_RESULTS_PER_QUERY = 100
 TOP_COMMENTS_PER_POST = 5
-MIN_SCORE_FOR_COMMENTS = 5
-MIN_COMMENTS_FOR_FETCH = 3
+MIN_SCORE_FOR_COMMENTS = 3
+MIN_COMMENTS_FOR_FETCH = 2
 
-# --- Subreddits ---
+# --- Search keywords (the real value — finding pain points directly) ---
+SEARCH_KEYWORDS = [
+    # Sean's keywords
+    "sole business owner everyday challenges",
+    "solopreneur",
+    "small business and AI",
+    "small business challenges with AI",
+    # Pain-point keywords aligned to SoloSolutionsAI
+    "missed calls clients",
+    "too many hats small business",
+    "client follow up",
+    "losing leads",
+    "answering phones",
+]
+
+# --- Subreddits to search within ---
 SUBREDDIT_GROUPS = {
     "general": ["smallbusiness", "Entrepreneur", "freelance", "solopreneur"],
     "legal": ["lawfirm", "lawyers"],
