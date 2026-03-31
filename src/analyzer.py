@@ -1,8 +1,8 @@
 import json
 import logging
+import requests as http_requests
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
-from supabase import create_client
 
 from src.config import (
     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
@@ -12,7 +12,11 @@ from src.config import (
 
 logger = logging.getLogger(__name__)
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_SERVICE_ROLE_KEY,
+    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+    "Content-Type": "application/json",
+}
 openai = OpenAI(api_key=OPENAI_API_KEY)
 
 SYSTEM_PROMPT = """You are a market research analyst for SoloSolutionsAI, a platform that helps solo professionals and small business owners automate client interactions.
@@ -43,13 +47,22 @@ def get_recent_posts(hours: int = 24) -> list[dict]:
     """Pull posts crawled in the last N hours."""
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
-    result = supabase.table("spider_raw_posts") \
-        .select("*") \
-        .gte("crawled_at", cutoff) \
-        .order("score", desc=True) \
-        .execute()
+    resp = http_requests.get(
+        f"{SUPABASE_URL}/rest/v1/spider_raw_posts",
+        headers=SUPABASE_HEADERS,
+        params={
+            "select": "*",
+            "crawled_at": f"gte.{cutoff}",
+            "order": "score.desc",
+        },
+        timeout=15,
+    )
 
-    return result.data or []
+    if resp.ok:
+        return resp.json()
+    else:
+        logger.error(f"Failed to fetch recent posts: {resp.status_code}")
+        return []
 
 
 def group_posts(posts: list[dict]) -> dict[str, list[dict]]:
@@ -125,15 +138,26 @@ def store_insights(group_name: str, insights: dict, post_count: int):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
-        supabase.table("spider_insights").upsert({
-            "date": today,
-            "subreddit_group": group_name,
-            "themes": insights.get("themes", []),
-            "phrases": insights.get("phrases", []),
-            "hooks": insights.get("hooks", []),
-            "angles": insights.get("angles", []),
-            "raw_post_count": post_count,
-        }, on_conflict="date,subreddit_group").execute()
+        headers = {
+            **SUPABASE_HEADERS,
+            "Prefer": "resolution=merge-duplicates",
+        }
+        resp = http_requests.post(
+            f"{SUPABASE_URL}/rest/v1/spider_insights",
+            headers=headers,
+            json={
+                "date": today,
+                "subreddit_group": group_name,
+                "themes": insights.get("themes", []),
+                "phrases": insights.get("phrases", []),
+                "hooks": insights.get("hooks", []),
+                "angles": insights.get("angles", []),
+                "raw_post_count": post_count,
+            },
+            timeout=15,
+        )
+        if not resp.ok:
+            logger.error(f"Failed to store insights for '{group_name}': {resp.status_code} {resp.text[:200]}")
 
     except Exception as e:
         logger.error(f"Failed to store insights for '{group_name}': {e}")

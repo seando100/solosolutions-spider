@@ -15,11 +15,11 @@ RECIPIENT_EMAIL = "sean@solosolutionsai.com"
 
 # --- Reddit ---
 USER_AGENT = "SoloSolutionsSpider/1.0 (market-research; contact: sean@solosolutionsai.com)"
-REQUEST_DELAY = 2.0  # seconds between Reddit requests
-SEARCH_RESULTS_PER_QUERY = 100
+REQUEST_DELAY = 4.0  # seconds between Reddit search requests
+COMMENT_DELAY = 6.0  # seconds between comment fetches (Reddit is stricter here)
+SEARCH_RESULTS_PER_QUERY = 50  # fewer per search, more targeted
 TOP_COMMENTS_PER_POST = 5
-MIN_SCORE_FOR_COMMENTS = 3
-MIN_COMMENTS_FOR_FETCH = 2
+MAX_POSTS_FOR_COMMENTS = 30  # only fetch comments for top N posts by score
 
 # --- Search keywords (the real value — finding pain points directly) ---
 SEARCH_KEYWORDS = [

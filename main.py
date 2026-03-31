@@ -19,8 +19,8 @@ def main():
     logger.info("Step 1/3: Crawling Reddit...")
     crawl_stats = crawl_all()
     logger.info(f"Crawl complete: {crawl_stats['posts_crawled']} posts, "
-                f"{len(crawl_stats['subreddits_succeeded'])} subreddits OK, "
-                f"{len(crawl_stats['subreddits_failed'])} failed")
+                f"{len(crawl_stats.get('searches_succeeded', []))} searches OK, "
+                f"{len(crawl_stats.get('searches_failed', []))} failed")
 
     if crawl_stats["posts_crawled"] == 0:
         logger.warning("No posts crawled. Skipping analysis and email.")

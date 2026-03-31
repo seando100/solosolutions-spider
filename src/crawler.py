@@ -2,13 +2,12 @@ import logging
 import time
 import requests
 from datetime import datetime, timezone
-from supabase import create_client
 
 from src.config import (
     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-    USER_AGENT, REQUEST_DELAY, SEARCH_RESULTS_PER_QUERY,
-    TOP_COMMENTS_PER_POST, MIN_SCORE_FOR_COMMENTS,
-    MIN_COMMENTS_FOR_FETCH, ALL_SUBREDDITS, SEARCH_KEYWORDS,
+    USER_AGENT, REQUEST_DELAY, COMMENT_DELAY, SEARCH_RESULTS_PER_QUERY,
+    TOP_COMMENTS_PER_POST, MAX_POSTS_FOR_COMMENTS,
+    ALL_SUBREDDITS, SEARCH_KEYWORDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -16,7 +15,12 @@ logger = logging.getLogger(__name__)
 session = requests.Session()
 session.headers.update({"User-Agent": USER_AGENT})
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+SUPABASE_HEADERS = {
+    "apikey": SUPABASE_SERVICE_ROLE_KEY,
+    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "resolution=merge-duplicates",
+}
 
 
 def parse_post(child: dict, source_sub: str = "") -> dict | None:
@@ -119,19 +123,27 @@ def fetch_top_comments(reddit_id: str) -> list[dict]:
 
 
 def store_posts(posts: list[dict]) -> int:
-    """Upsert posts into spider_raw_posts. Returns count stored."""
+    """Upsert posts into spider_raw_posts via REST API. Returns count stored."""
     if not posts:
         return 0
 
     stored = 0
-    for post in posts:
+    # Batch in groups of 50
+    for i in range(0, len(posts), 50):
+        batch = posts[i:i + 50]
         try:
-            supabase.table("spider_raw_posts").upsert(
-                post, on_conflict="reddit_id"
-            ).execute()
-            stored += 1
+            resp = requests.post(
+                f"{SUPABASE_URL}/rest/v1/spider_raw_posts",
+                headers=SUPABASE_HEADERS,
+                json=batch,
+                timeout=15,
+            )
+            if resp.ok:
+                stored += len(batch)
+            else:
+                logger.warning(f"Supabase upsert batch failed: {resp.status_code} {resp.text[:200]}")
         except Exception as e:
-            logger.warning(f"Failed to store post {post['reddit_id']}: {e}")
+            logger.warning(f"Failed to store batch: {e}")
 
     return stored
 
@@ -165,15 +177,18 @@ def crawl_all() -> dict:
 
     unique_posts = list(all_posts.values())
 
-    # Fetch comments for posts with engagement
-    comment_count = 0
-    for post in unique_posts:
-        if post["score"] >= MIN_SCORE_FOR_COMMENTS or post["num_comments"] >= MIN_COMMENTS_FOR_FETCH:
-            post["top_comments"] = fetch_top_comments(post["reddit_id"])
-            comment_count += 1
-            time.sleep(REQUEST_DELAY)
+    # Fetch comments for top posts by score only (stay under rate limit)
+    sorted_by_score = sorted(unique_posts, key=lambda p: p["score"], reverse=True)
+    top_posts = [p for p in sorted_by_score if p["num_comments"] >= 2][:MAX_POSTS_FOR_COMMENTS]
 
-    logger.info(f"Fetched comments for {comment_count} posts with engagement")
+    comment_count = 0
+    for post in top_posts:
+        post["top_comments"] = fetch_top_comments(post["reddit_id"])
+        if post["top_comments"]:
+            comment_count += 1
+        time.sleep(COMMENT_DELAY)
+
+    logger.info(f"Fetched comments for {comment_count}/{len(top_posts)} top posts")
 
     stored = store_posts(unique_posts)
 
