@@ -9,6 +9,13 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 
+# Brave Search is the data source. Reddit closed unauthenticated .json access,
+# so every request the old crawler made returns a 403 HTML page.
+BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
+BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+BRAVE_RESULTS_PER_QUERY = 20
+BRAVE_REQUEST_DELAY = 1.1  # Brave's free tier allows roughly one query per second
+
 # --- Email ---
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "Research <research@example.com>")
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "")

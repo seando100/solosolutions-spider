@@ -1,7 +1,8 @@
 # SoloSolutions Spider
 
-Market research crawler. Reads Reddit for small business pain points, analyses them with
-GPT-4o, stores the findings, and emails a daily brief. Ran unattended on a daily GitHub Actions schedule, 58 runs, until the workflow was retired.
+Market research pipeline. Searches the web via the Brave Search API for small-business
+pain points, analyses them with GPT-4o, stores the findings and emails a daily brief.
+Runs each morning at 06:00 via Windows Task Scheduler.
 
 Built because market research is a job nobody does consistently by hand. A crawler does it
 every morning at six whether or not anyone remembers to ask.
@@ -9,8 +10,8 @@ every morning at six whether or not anyone remembers to ask.
 ## Architecture
 
 ```
-GitHub Actions (daily 6am ET)
-  -> crawler.py (Reddit public JSON feeds)
+Windows Task Scheduler (daily 6am)
+  -> brave_source.py (Brave Search API)
   -> spider_raw_posts (Supabase)
   -> analyzer.py (OpenAI GPT-4o)
   -> spider_insights (Supabase)

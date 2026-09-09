@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from src.crawler import crawl_all
+from src.brave_source import crawl_all
 from src.analyzer import analyze_all
 from src.emailer import send_daily_summary
 
@@ -16,15 +16,21 @@ def main():
     logger.info("=== SoloSolutions Spider — starting daily pipeline ===")
 
     # Step 1: Crawl Reddit
-    logger.info("Step 1/3: Crawling Reddit...")
+    logger.info("Step 1/3: Searching (Brave)...")
     crawl_stats = crawl_all()
     logger.info(f"Crawl complete: {crawl_stats['posts_crawled']} posts, "
                 f"{len(crawl_stats.get('searches_succeeded', []))} searches OK, "
                 f"{len(crawl_stats.get('searches_failed', []))} failed")
 
+    # A run that collects nothing is a FAILURE, not a quiet no-op. Exiting zero
+    # here is what hid Reddit's 403s for seven weeks: Task Scheduler saw success
+    # every morning while nothing was being stored.
     if crawl_stats["posts_crawled"] == 0:
-        logger.warning("No posts crawled. Skipping analysis and email.")
-        sys.exit(0)
+        logger.error(
+            "Collected 0 results from %d queries. Treating this as a failure.",
+            len(crawl_stats.get("searches_failed", [])),
+        )
+        sys.exit(2)
 
     # Step 2: Analyze
     logger.info("Step 2/3: Analyzing with OpenAI...")
