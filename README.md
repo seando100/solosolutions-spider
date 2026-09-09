@@ -1,6 +1,10 @@
 # SoloSolutions Spider
 
-Market research crawler for SoloSolutionsAI. Crawls Reddit for small business pain points, analyzes with GPT-4o, emails daily brief.
+Market research crawler. Reads Reddit for small business pain points, analyses them with
+GPT-4o, stores the findings, and emails a daily brief. Runs unattended on GitHub Actions.
+
+Built because market research is a job nobody does consistently by hand. A crawler does it
+every morning at six whether or not anyone remembers to ask.
 
 ## Architecture
 
@@ -11,7 +15,7 @@ GitHub Actions (daily 6am ET)
   -> analyzer.py (OpenAI GPT-4o)
   -> spider_insights (Supabase)
   -> emailer.py (Resend)
-  -> sean@solosolutionsai.com
+  -> your inbox (RECIPIENT_EMAIL)
 ```
 
 ## Subreddits
