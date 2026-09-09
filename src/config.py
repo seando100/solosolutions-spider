@@ -10,11 +10,12 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 
 # --- Email ---
-SENDER_EMAIL = "SoloSolutionsAI Research <intake@sololawyerai.com>"
-RECIPIENT_EMAIL = "sean@solosolutionsai.com"
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "Research <research@example.com>")
+RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "")
 
 # --- Reddit ---
-USER_AGENT = "SoloSolutionsSpider/1.0 (market-research; contact: sean@solosolutionsai.com)"
+# Reddit asks crawlers to identify themselves and give a contact address.
+USER_AGENT = f"SoloSolutionsSpider/1.0 (market-research; contact: {os.environ.get('CRAWLER_CONTACT', 'unset')})"
 REQUEST_DELAY = 4.0  # seconds between Reddit search requests
 COMMENT_DELAY = 6.0  # seconds between comment fetches (Reddit is stricter here)
 SEARCH_RESULTS_PER_QUERY = 50  # fewer per search, more targeted

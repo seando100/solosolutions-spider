@@ -53,7 +53,7 @@ def search_reddit(query: str, subreddit: str | None = None) -> list[dict]:
             "q": query,
             "restrict_sr": "on",
             "sort": "relevance",
-            "t": "week",
+            "t": "day",
             "limit": SEARCH_RESULTS_PER_QUERY,
             "raw_json": 1,
         }
@@ -62,7 +62,7 @@ def search_reddit(query: str, subreddit: str | None = None) -> list[dict]:
         params = {
             "q": query,
             "sort": "relevance",
-            "t": "week",
+            "t": "day",
             "limit": SEARCH_RESULTS_PER_QUERY,
             "raw_json": 1,
         }
