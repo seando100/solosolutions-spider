@@ -1,7 +1,7 @@
 # SoloSolutions Spider
 
 Market research crawler. Reads Reddit for small business pain points, analyses them with
-GPT-4o, stores the findings, and emails a daily brief. Runs unattended on GitHub Actions.
+GPT-4o, stores the findings, and emails a daily brief. Ran unattended on a daily GitHub Actions schedule, 58 runs, until the workflow was retired.
 
 Built because market research is a job nobody does consistently by hand. A crawler does it
 every morning at six whether or not anyone remembers to ask.
@@ -36,4 +36,8 @@ python main.py
 
 ## Manual Trigger
 
-Go to GitHub Actions tab and click "Run workflow" on Daily Reddit Crawl.
+Run `python -m src.main` locally.
+
+The scheduled workflow (`.github/workflows/daily-crawl.yml`, cron `0 10 * * *`) is retired
+and kept in git history. Restoring it needs the workflow file back plus four repository
+secrets: OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and RESEND_API_KEY.
