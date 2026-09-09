@@ -143,7 +143,7 @@ def store_insights(group_name: str, insights: dict, post_count: int):
             "Prefer": "resolution=merge-duplicates",
         }
         resp = http_requests.post(
-            f"{SUPABASE_URL}/rest/v1/spider_insights",
+            f"{SUPABASE_URL}/rest/v1/spider_insights?on_conflict=date,subreddit_group",
             headers=headers,
             json={
                 "date": today,

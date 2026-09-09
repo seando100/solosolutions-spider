@@ -37,6 +37,15 @@ def main():
     insights = analyze_all()
     logger.info(f"Analysis complete: {len(insights)} insight groups")
 
+    # Same rule as the crawl step. Results were collected but nothing could be
+    # made of them, which is a failure of the run, not a quiet outcome.
+    if not insights:
+        logger.error(
+            "Stored %d results but produced 0 insights. Analysis failed.",
+            crawl_stats["posts_crawled"],
+        )
+        sys.exit(3)
+
     # Step 3: Email summary
     logger.info("Step 3/3: Sending daily summary...")
     success = send_daily_summary(insights, crawl_stats)

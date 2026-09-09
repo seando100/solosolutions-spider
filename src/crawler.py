@@ -133,7 +133,10 @@ def store_posts(posts: list[dict]) -> int:
         batch = posts[i:i + 50]
         try:
             resp = requests.post(
-                f"{SUPABASE_URL}/rest/v1/spider_raw_posts",
+                # on_conflict names the unique constraint to merge against. Without it
+                # PostgREST upserts on the primary key, so every re-seen URL raised a
+                # 409 and the whole batch of 50 was dropped, not just the duplicate.
+                f"{SUPABASE_URL}/rest/v1/spider_raw_posts?on_conflict=reddit_id",
                 headers=SUPABASE_HEADERS,
                 json=batch,
                 timeout=15,

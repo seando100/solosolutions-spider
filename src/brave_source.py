@@ -114,30 +114,35 @@ def crawl_all() -> dict:
     succeeded: list[str] = []
     failed: list[str] = []
 
+    # Every term in every group, not just the first. SUBREDDIT_GROUPS is a
+    # taxonomy of audiences: "healthcare" means veterinary AND therapists AND
+    # insurance, and searching only the first would silently drop two thirds of
+    # the coverage. The term is stored as the post's subreddit so the analyser's
+    # existing term-to-group lookup keeps working unchanged.
     for topic, terms in SUBREDDIT_GROUPS.items():
-        subject = terms[0] if terms else topic
-        for keyword in SEARCH_KEYWORDS:
-            query = f"{subject} {keyword}"
-            try:
-                results = search(query, topic)
-            except RuntimeError:
-                raise                      # auth and quota failures stop the run
-            except Exception as e:
-                logger.warning("Query failed %r: %s", query, e)
-                failed.append(query)
-                continue
+        for term in (terms or [topic]):
+            for keyword in SEARCH_KEYWORDS:
+                query = f"{term} {keyword}"
+                try:
+                    results = search(query, term)
+                except RuntimeError:
+                    raise                  # auth and quota failures stop the run
+                except Exception as e:
+                    logger.warning("Query failed %r: %s", query, e)
+                    failed.append(query)
+                    continue
 
-            if results:
-                succeeded.append(query)
-            else:
-                failed.append(query)
+                if results:
+                    succeeded.append(query)
+                else:
+                    failed.append(query)
 
-            for p in results:
-                if p["reddit_id"] not in seen:
-                    seen.add(p["reddit_id"])
-                    all_posts.append(p)
+                for p in results:
+                    if p["reddit_id"] not in seen:
+                        seen.add(p["reddit_id"])
+                        all_posts.append(p)
 
-            time.sleep(BRAVE_REQUEST_DELAY)
+                time.sleep(BRAVE_REQUEST_DELAY)
 
     stored = store_posts(all_posts)
     logger.info("Brave crawl: %d unique results, %d stored, %d queries OK, %d empty",
